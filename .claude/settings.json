@@ -1,0 +1,60 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test)",
+      "Bash(npm run build)",
+      "Bash(npm run dev)",
+      "Bash(npm install)",
+      "Bash(npm ci)",
+      "Bash(npx tsc *)",
+      "Bash(node version-bump.mjs *)",
+      "Bash(node scripts/run-tests.mjs)",
+      "Bash(scripts/pre-commit-check.sh)",
+      "Bash(git status)",
+      "Bash(git status *)",
+      "Bash(git diff)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git restore --staged *)",
+      "Bash(git branch --show-current)",
+      "Edit(./src/**)",
+      "Edit(./tests/**)",
+      "Edit(./README.md)",
+      "Edit(./CHANGELOG.md)"
+    ],
+    "ask": [
+      "Bash(git push *)",
+      "Bash(gh release *)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 30,
+            "statusMessage": "Refreshing codebase context...",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && VERSION=$(node -p \"require('./manifest.json').version\" 2>/dev/null || echo 'unknown') && BRANCH=$(git branch --show-current 2>/dev/null || echo 'unknown') && RECENT=$(git log --oneline -8 2>/dev/null || echo 'no git log') && STATUS=$(git status --short 2>/dev/null || echo 'clean') && SRC_FILES=$(find src -name '*.ts' | sort 2>/dev/null | tr '\\n' ' ') && TEST_FILES=$(find tests -name '*.test.ts' | sort 2>/dev/null | tr '\\n' ' ') && CONTEXT=$(printf '## Live Codebase Snapshot\\n\\n**Version:** %s\\n**Branch:** %s\\n\\n**Recent commits:**\\n%s\\n\\n**Working tree status:**\\n%s\\n\\n**Source files (src/):**\\n%s\\n\\n**Test files (tests/):**\\n%s\\n\\n**Run tests:** npm test\\n**Build:** npm run build' \"$VERSION\" \"$BRANCH\" \"$RECENT\" \"$STATUS\" \"$SRC_FILES\" \"$TEST_FILES\") && jq -n --arg ctx \"$CONTEXT\" '{hookSpecificOutput:{hookEventName:\"SessionStart\",additionalContext:$ctx}}'"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/pre-commit-check.sh",
+            "timeout": 180,
+            "statusMessage": "Running pre-commit checks..."
+          }
+        ]
+      }
+    ]
+  }
+}

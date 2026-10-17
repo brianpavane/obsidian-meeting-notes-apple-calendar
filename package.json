@@ -1,0 +1,31 @@
+{
+	"name": "calendar-note-integration",
+	"version": "6.24.2",
+	"description": "Meeting notes from Apple Calendar on your Mac: a note before every meeting, a Today panel with one-click join, Krisp transcript import, AI summaries by copy and paste, and action items tracked across all your meetings.",
+	"main": "main.js",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"test": "node scripts/run-tests.mjs",
+		"version": "node version-bump.mjs && git add manifest.json versions.json package.json",
+		"version:patch": "node version-bump.mjs patch && git add manifest.json versions.json package.json",
+		"version:minor": "node version-bump.mjs minor && git add manifest.json versions.json package.json",
+		"version:major": "node version-bump.mjs major && git add manifest.json versions.json package.json"
+	},
+	"keywords": [
+		"obsidian",
+		"google-calendar",
+		"notes",
+		"productivity"
+	],
+	"author": "Brian Pavane",
+	"license": "MIT",
+	"devDependencies": {
+		"@types/node": "^18.0.0",
+		"builtin-modules": "^3.3.0",
+		"esbuild": "0.17.3",
+		"obsidian": "latest",
+		"tslib": "2.4.0",
+		"typescript": "4.7.4"
+	}
+}

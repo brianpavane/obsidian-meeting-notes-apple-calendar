@@ -1,0 +1,242 @@
+/* =========================================================
+   Meeting Notes for Apple Calendar — Plugin Styles
+   ========================================================= */
+
+/* ----------------------------------------------------------
+   Event picker modal suggestions
+   ---------------------------------------------------------- */
+
+.gcal-suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 2px 0;
+}
+
+.gcal-suggestion-title {
+  font-weight: 600;
+  font-size: 0.95em;
+  color: var(--text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gcal-suggestion-meta {
+  font-size: 0.82em;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+}
+
+.gcal-suggestion-time {
+  color: var(--text-muted);
+}
+
+.gcal-suggestion-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.85em;
+  background: var(--background-modifier-border);
+  color: var(--text-muted);
+}
+
+.gcal-badge-agenda {
+  background: var(--color-blue-rgb, 59, 130, 246);
+  background: rgba(var(--interactive-accent-rgb, 99, 102, 241), 0.15);
+  color: var(--interactive-accent);
+}
+
+.gcal-badge-video {
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--color-green);
+}
+
+/* Highlight matched characters in suggestions */
+.suggestion-highlight {
+  color: var(--interactive-accent);
+  font-weight: 600;
+}
+
+/* ----------------------------------------------------------
+   Status bar
+   ---------------------------------------------------------- */
+
+.cal-notes-status {
+  cursor: pointer;
+}
+
+/* ----------------------------------------------------------
+   Meeting action items view
+   ---------------------------------------------------------- */
+
+.cal-notes-action-items .cal-notes-meeting {
+  margin-bottom: 1em;
+}
+
+.cal-notes-action-items .cal-notes-meeting-title {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cal-notes-action-items .cal-notes-meeting-date,
+.cal-notes-action-items .cal-notes-empty {
+  font-size: 0.82em;
+  color: var(--text-muted);
+}
+
+.cal-notes-action-items ul {
+  margin: 0.3em 0 0;
+  padding-left: 0;
+}
+
+.cal-notes-action-items .task-list-item {
+  list-style: none;
+  display: flex;
+  gap: 0.4em;
+  align-items: baseline;
+}
+
+.cal-notes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5em;
+}
+
+.cal-notes-item-meta {
+  display: flex;
+  gap: 0.6em;
+  font-size: 0.82em;
+  color: var(--text-muted);
+}
+
+.cal-notes-item-meta a {
+  cursor: pointer;
+}
+
+.cal-notes-due.is-overdue {
+  color: var(--text-error);
+  font-weight: 600;
+}
+
+.cal-notes-action-items .cal-notes-header {
+  flex-wrap: wrap;
+}
+
+.cal-notes-action-items .cal-notes-item {
+  flex: 1;
+}
+
+.cal-notes-wont-do {
+  color: var(--text-faint);
+  opacity: 0;
+  padding: 0 0.2em;
+}
+
+.cal-notes-action-items .task-list-item:hover .cal-notes-wont-do,
+.cal-notes-wont-do:focus-visible {
+  opacity: 1;
+}
+
+/* ----------------------------------------------------------
+   Today's meetings view
+   ---------------------------------------------------------- */
+
+.cal-notes-today > .cal-notes-header {
+  flex-wrap: wrap;
+}
+
+.cal-notes-day-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+}
+
+.cal-notes-day-nav h4 {
+  margin: 0;
+}
+
+.cal-notes-today-item {
+  padding: 0.5em 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.cal-notes-today-item.is-done {
+  opacity: 0.55;
+}
+
+.cal-notes-today-item.is-now {
+  border-left: 3px solid var(--interactive-accent);
+  padding-left: 0.5em;
+}
+
+.cal-notes-today .cal-notes-meeting-title {
+  display: block;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cal-notes-today .cal-notes-meeting-date {
+  font-size: 0.82em;
+  color: var(--text-muted);
+}
+
+.cal-notes-badge {
+  margin-left: 0.5em;
+  padding: 0 0.4em;
+  border-radius: var(--radius-s);
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-size: 0.9em;
+}
+
+.cal-notes-actions {
+  display: flex;
+  gap: 0.4em;
+  margin-top: 0.3em;
+}
+
+/* ----------------------------------------------------------
+   Settings: full-width text box
+   ---------------------------------------------------------- */
+
+.cal-notes-wide-setting .setting-item-info {
+  display: none;
+}
+
+.cal-notes-wide-setting .setting-item-control {
+  width: 100%;
+}
+
+.cal-notes-priority {
+  font-weight: 600;
+}
+
+.cal-notes-priority.is-highest,
+.cal-notes-priority.is-high {
+  color: var(--text-error);
+}
+
+.cal-notes-priority.is-low,
+.cal-notes-priority.is-lowest {
+  color: var(--text-faint);
+}
+
+.cal-notes-today .cal-notes-actions {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.cal-notes-icon-button {
+  padding: 4px 6px;
+}
+
+.cal-notes-capture {
+  width: 100%;
+  font-family: var(--font-monospace);
+  font-size: 0.85em;
+}
