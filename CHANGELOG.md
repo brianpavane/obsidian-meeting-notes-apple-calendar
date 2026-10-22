@@ -7,6 +7,20 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Added
+
+**Today's meetings shows each meeting's note, or why it has none**
+Every meeting in the Today's meetings panel now has a line under its title. It links to the meeting's note, or says **Note deleted**, **No note was created** (a past meeting) or **Note not created yet** (a meeting still to come). Step back with the ‹ arrow to find past meetings whose note you deleted. Their button reads **Recreate note**, so you can bring the note back and fill it in.
+
+### Changed
+
+**Notes made from the Today panel or the event picker count as made**
+A note created by clicking **Create note** is now remembered like one the plugin created on its own. If you delete it, the panel shows **Note deleted**, and Refresh doesn't bring it back. Rebuild still does.
+
+---
+
 ## [6.24.2] – 2026-10-13
 
 ### Changed

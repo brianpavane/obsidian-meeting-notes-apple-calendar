@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { adHocEvent, dayRows, dayStart } from "../src/todayView";
+import { adHocEvent, dayRows, dayStart, noteStatus } from "../src/todayView";
 import { buildEvent } from "./support/testHelpers";
 
 const at = (id: string, start: string, end: string, extra = {}) =>
@@ -46,4 +46,23 @@ test("adHocEvent makes a 30-minute meeting on the shown day at the current quart
   assert.equal(event.id, `adhoc-${now.getTime()}`);
   assert.equal(new Date(event.start.dateTime!).getTime(), new Date(2026, 9, 7, 14, 30).getTime());
   assert.equal(new Date(event.end.dateTime!).getTime(), new Date(2026, 9, 7, 15, 0).getTime());
+});
+
+test("noteStatus tells a deleted note from one never made, and a meeting still to come", () => {
+  const now = new Date("2026-10-06T11:15:00-04:00");
+  const [past, current, future] = dayRows(events, dayStart(now), now);
+
+  assert.equal(noteStatus(past, true, true), "note");
+  assert.equal(noteStatus(past, false, true), "deleted");
+  assert.equal(noteStatus(future, false, true), "deleted");
+  assert.equal(noteStatus(past, false, false), "missing");
+  assert.equal(noteStatus(current, false, false), "pending");
+  assert.equal(noteStatus(future, false, false), "pending");
+});
+
+test("noteStatus reports a meeting two weeks back whose note was deleted", () => {
+  const now = new Date("2026-10-20T11:15:00-04:00");
+  const [row] = dayRows(events, dayStart(now, -14), now);
+  assert.equal(row.event.id, "standup");
+  assert.equal(noteStatus(row, false, true), "deleted");
 });

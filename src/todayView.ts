@@ -2,10 +2,11 @@
  * @file todayView.ts
  * @description The "Today's meetings" sidebar view: every timed meeting on
  * one day's calendar (today by default; arrows step a day back or ahead),
- * with buttons to open (or create) its note and to join.
+ * with a link to its note (or why it has none) and buttons to open (or
+ * create) its note and to join.
  */
 
-import { App, ItemView, Modal, Setting, setIcon, WorkspaceLeaf } from "obsidian";
+import { App, ItemView, Modal, Setting, setIcon, TFile, WorkspaceLeaf } from "obsidian";
 import type { CalendarEvent } from "./calendarApi";
 import { joinUrl } from "./noteCreator";
 
@@ -43,6 +44,24 @@ export function dayRows(events: CalendarEvent[], day: Date, now: Date): TodayRow
   return rows.sort((a, b) => a.start.getTime() - b.start.getTime());
 }
 
+export type NoteStatus = "note" | "deleted" | "missing" | "pending";
+
+/**
+ * Whether the meeting has a note and, if not, why: its note was deleted (the
+ * plugin made one before), it ended without one, or it hasn't started yet.
+ */
+export function noteStatus(row: TodayRow, hasNote: boolean, processed: boolean): NoteStatus {
+  if (hasNote) return "note";
+  if (processed) return "deleted";
+  return row.state === "done" ? "missing" : "pending";
+}
+
+const STATUS_TEXT: Record<Exclude<NoteStatus, "note">, string> = {
+  deleted: "Note deleted",
+  missing: "No note was created",
+  pending: "Note not created yet",
+};
+
 /**
  * A meeting that isn't on the calendar, for a note made with the "New note"
  * button: 30 minutes on `day`, starting at the current time of day rounded
@@ -65,8 +84,10 @@ export function adHocEvent(title: string, day: Date, now: Date): CalendarEvent {
 export interface TodayHost {
   /** The meetings on the day starting at `day`, or null if the calendar couldn't be read. */
   loadDay(day: Date): Promise<CalendarEvent[] | null>;
-  /** IDs of events that already have a note. */
-  notedEventIds(): Set<string>;
+  /** Each event's note, by event ID. */
+  eventNotes(): Map<string, TFile>;
+  /** IDs of events the plugin has made (or adopted) a note for, even if it was since deleted. */
+  processedEventIds(): Set<string>;
   openNote(event: CalendarEvent): Promise<void>;
   /** Run a follow-up step on the meeting's note. */
   noteAction(event: CalendarEvent, action: NoteAction): Promise<void>;
@@ -141,6 +162,7 @@ export class TodayView extends ItemView {
     this.registerInterval(window.setInterval(() => this.tick(), TICK_MS));
     this.registerEvent(this.app.vault.on("create", () => this.render()));
     this.registerEvent(this.app.vault.on("delete", () => this.render()));
+    this.registerEvent(this.app.vault.on("rename", () => this.render()));
     await this.reload();
   }
 
@@ -206,7 +228,8 @@ export class TodayView extends ItemView {
       return;
     }
 
-    const noted = this.host.notedEventIds();
+    const notes = this.host.eventNotes();
+    const processed = this.host.processedEventIds();
     for (const row of rows) {
       const item = el.createDiv({ cls: `cal-notes-today-item is-${row.state}` });
       const when = item.createDiv({ cls: "cal-notes-meeting-date" });
@@ -216,9 +239,20 @@ export class TodayView extends ItemView {
       const title = item.createEl("a", { cls: "cal-notes-meeting-title", text: row.event.summary?.trim() || "Untitled Event" });
       title.addEventListener("click", () => this.host.openNote(row.event));
 
+      const file = notes.get(row.event.id);
+      const status = noteStatus(row, !!file, processed.has(row.event.id));
+      const noteLine = item.createDiv({ cls: `cal-notes-note-status is-${status}` });
+      setIcon(noteLine.createSpan({ cls: "cal-notes-note-status-icon" }), status === "note" ? "file-text" : "file-x");
+      if (file) {
+        const link = noteLine.createEl("a", { text: file.basename, attr: { "aria-label": file.path } });
+        link.addEventListener("click", () => this.app.workspace.getLeaf(false).openFile(file));
+      } else {
+        noteLine.createSpan({ text: STATUS_TEXT[status as Exclude<NoteStatus, "note">] });
+      }
+
       const actions = item.createDiv({ cls: "cal-notes-actions" });
-      const hasNote = noted.has(row.event.id);
-      const noteButton = actions.createEl("button", { text: hasNote ? "Open note" : "Create note" });
+      const hasNote = !!file;
+      const noteButton = actions.createEl("button", { text: hasNote ? "Open note" : status === "deleted" ? "Recreate note" : "Create note" });
       noteButton.addEventListener("click", () => this.host.openNote(row.event));
       const url = joinUrl(row.event);
       if (url && row.state !== "done") {

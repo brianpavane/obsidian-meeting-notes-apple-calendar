@@ -185,6 +185,31 @@
   color: var(--text-muted);
 }
 
+.cal-notes-today .cal-notes-note-status {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  font-size: 0.82em;
+  color: var(--text-muted);
+}
+
+.cal-notes-today .cal-notes-note-status a {
+  cursor: pointer;
+}
+
+.cal-notes-today .cal-notes-note-status.is-deleted {
+  color: var(--text-warning);
+}
+
+.cal-notes-note-status-icon {
+  display: inline-flex;
+}
+
+.cal-notes-note-status-icon svg {
+  width: 0.9em;
+  height: 0.9em;
+}
+
 .cal-notes-badge {
   margin-left: 0.5em;
   padding: 0 0.4em;

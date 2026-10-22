@@ -318,7 +318,8 @@ export default class GoogleCalendarPlugin extends Plugin {
     this.registerView(ACTION_ITEMS_VIEW, (leaf) => new ActionItemsView(leaf, () => this.myNames(), () => this.openAddTodo()));
     this.registerView(TODAY_VIEW, (leaf) => new TodayView(leaf, {
       loadDay: (day) => this.loadDayEvents(day),
-      notedEventIds: () => new Set(findNotesByEventId(this.app).keys()),
+      eventNotes: () => findNotesByEventId(this.app),
+      processedEventIds: () => new Set(this.settings.processedEventIds),
       openNote: (event) => this.openNoteForEvent(event),
       noteAction: (event, action) => this.meetingNoteAction(event, action),
       openSeries: (event) => this.openSeriesNote(event.id, event.summary?.trim() || "Untitled Event"),
@@ -2139,6 +2140,10 @@ export default class GoogleCalendarPlugin extends Plugin {
       const series = await this.newNoteSeries(findNotesByEventId(this.app), event);
       const { file, wasCreated } = await createNoteFile(this.app, event, { ...options, ...series });
       if (wasCreated) await this.writeNewNoteBrief(file as TFile, event);
+      if (!event.id.startsWith("adhoc-") && !this.settings.processedEventIds.includes(event.id)) {
+        this.settings.processedEventIds.push(event.id);
+        await this.trimAndSaveProcessedIds();
+      }
       await this.app.workspace.getLeaf(false).openFile(file as TFile);
       new Notice(`Note ready: ${file.name}`);
     } catch (err) {
