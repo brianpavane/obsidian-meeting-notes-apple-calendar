@@ -1,7 +1,7 @@
 {
 	"id": "calendar-note-integration",
 	"name": "Meeting Notes for Apple Calendar",
-	"version": "6.24.2",
+	"version": "6.25.0",
 	"minAppVersion": "1.4.10",
 	"description": "Meeting notes from Apple Calendar on your Mac: a note before every meeting, a Today panel with one-click join, Krisp transcript import, AI summaries by copy and paste, and action items tracked across all your meetings.",
 	"author": "Brian Pavane",
