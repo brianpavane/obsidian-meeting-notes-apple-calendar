@@ -7,6 +7,23 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Added
+
+**MacWhisper transcripts**
+A new **MacWhisper folder** setting (default `~/Documents/Transcripts/MacWhisper`) lets you import MacWhisper transcripts as well as Krisp ones. Recordings from both folders are offered together, by command, from the Today panel or automatically after a sync. MacWhisper recordings are matched by the start time in the file name. Its title is often another meeting's, so the title only breaks ties. Back-to-back lines from the same speaker are joined into one paragraph. A file changed in the last 2 minutes isn't offered, since it's probably still recording. The `ARCHIVE` subfolder is ignored.
+
+### Changed
+
+**Notes record which tool a transcript came from**
+Imported notes now get `transcript_source` (`Krisp` or `MacWhisper`) and `transcript_recording` instead of `krisp_recording`. Older notes keep `krisp_recording`, and their recordings still aren't offered again. On a newly created dashboard, the **Needs AI summary** view's Transcript column shows the source, including Krisp for older notes.
+
+**"Import Krisp transcript" is now "Import transcript"**
+The command, note header icon and Today panel button were renamed now that they cover both tools. Hotkeys keep working. The **Krisp Transcripts** settings section is now **Transcripts**. Recordings in the picker are labelled with start time first, then title and source.
+
+---
+
 ## [6.25.0] – 2026-10-21
 
 ### Added

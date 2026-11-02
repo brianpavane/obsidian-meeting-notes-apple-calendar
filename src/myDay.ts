@@ -47,7 +47,7 @@ export interface DayInput {
   myNames: string[];
   /** Meetings held recently that are still waiting for their AI reply. */
   unsummarized: TrackerMeeting[];
-  /** Ended meetings with a Krisp recording not yet imported. */
+  /** Ended meetings with a recording not yet imported. */
   recordings: number;
   updated: string;
 }
@@ -99,7 +99,7 @@ export function dayNote(input: DayInput): string {
   const loose = [
     ...input.unsummarized.map((m) => `- Add the AI reply: ${link(m)} · ${m.date}`),
     ...(input.recordings > 0
-      ? [`- ${input.recordings} Krisp recording${input.recordings !== 1 ? "s" : ""} to import (Today's meetings panel, or **Import Krisp transcript** in the meeting's note)`]
+      ? [`- ${input.recordings} recording${input.recordings !== 1 ? "s" : ""} to import (Today's meetings panel, or **Import transcript** in the meeting's note)`]
       : []),
   ];
 

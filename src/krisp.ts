@@ -1,6 +1,7 @@
 /**
  * @file krisp.ts
- * @description Read Krisp recordings from disk and match them to meetings.
+ * @description Read Krisp and MacWhisper recordings from disk and match them
+ * to meetings.
  *
  * Krisp saves each recording in its own folder, named "<title> - October 6,
  * 2026 2-30-24 PM", with a `transcript.txt` (or `.md`) that starts with a
@@ -9,6 +10,11 @@
  *   Zoom meeting - October 6, 2026 2-30-24 PM
  *   October 6, 2026 2:30:24 PM
  *   30m 9s
+ *
+ * MacWhisper saves one "<title> 2026-11-02 10_00_13.txt" file per recording,
+ * with no header: each block is a speaker line, then text, then a blank line.
+ * It keeps writing the file while recording, and its title is a guess from
+ * whatever calendar event was on at the time.
  */
 
 import { App, FuzzySuggestModal, Modal, Setting } from "obsidian";
@@ -19,6 +25,10 @@ import { join } from "path";
 const TRANSCRIPT_FILES = ["transcript.txt", "transcript.md"];
 /** The " - October 6, 2026 2-30-24 PM" Krisp adds to titles and folder names. */
 const STAMP_RE = /\s+-\s+([A-Za-z]+ \d{1,2}, \d{4}) (\d{1,2})-(\d{2})-(\d{2}) ([AP]M)\s*$/i;
+/** The " 2026-11-02 10_00_13.txt" MacWhisper ends file names with. */
+const MACWHISPER_RE = /^(.*?)\s*(\d{4})-(\d{2})-(\d{2}) (\d{2})_(\d{2})_(\d{2})\.txt$/i;
+/** A MacWhisper file changed this recently may still be recording. */
+const SETTLE_MS = 2 * 60_000;
 const HEADER_BYTES = 2_048;
 /** Earliest a recording can start before the meeting and still be offered. */
 const EARLIEST_MS = 10 * 60_000;
@@ -35,8 +45,11 @@ export interface KrispHeader {
   headerLines: number;
 }
 
+export type RecordingSource = "Krisp" | "MacWhisper";
+
 export interface Recording {
-  /** The recording's folder name. */
+  source: RecordingSource;
+  /** The recording's folder name (Krisp) or file name (MacWhisper). */
   name: string;
   path: string;
   title: string;
@@ -80,13 +93,45 @@ export function parseKrispHeader(text: string): KrispHeader {
   return { title: titleLine ? splitStamp(stripLabel(titleLine)).title : "", start, headerLines };
 }
 
+const escapeHeading = (line: string) => line.replace(/^(\s*)#/, "$1\\#");
+
 /** The transcript without its header, ready for a note: lines that would read as Markdown headings are escaped. */
 export function transcriptBody(text: string): string[] {
   const { headerLines } = parseKrispHeader(text);
   const lines = text.split(/\r?\n/).slice(headerLines);
   while (lines.length > 0 && !lines[0].trim()) lines.shift();
   while (lines.length > 0 && !lines[lines.length - 1].trim()) lines.pop();
-  return lines.map((l) => l.replace(/^(\s*)#/, "$1\\#"));
+  return lines.map(escapeHeading);
+}
+
+/**
+ * A MacWhisper transcript ready for a note: back-to-back blocks from the same
+ * speaker joined into one "**Speaker:** text" paragraph. Blocks without a
+ * speaker line are kept as they are.
+ */
+export function macWhisperBody(text: string): string[] {
+  const paragraphs: Array<{ speaker?: string; text: string }> = [];
+  for (const block of text.split(/\r?\n\s*\n/)) {
+    const lines = block.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0) continue;
+    const speaker = lines.length > 1 ? lines[0] : undefined;
+    const said = (speaker ? lines.slice(1) : lines).join(" ");
+    const last = paragraphs[paragraphs.length - 1];
+    if (speaker && last?.speaker === speaker) last.text += ` ${said}`;
+    else paragraphs.push({ speaker, text: said });
+  }
+  return paragraphs.flatMap((p, i) => [
+    ...(i > 0 ? [""] : []),
+    p.speaker ? `**${p.speaker}:** ${p.text}` : escapeHeading(p.text),
+  ]);
+}
+
+/** Title and start time from a MacWhisper file name. */
+export function parseMacWhisperName(name: string): { title: string; time?: Date } {
+  const m = name.match(MACWHISPER_RE);
+  if (!m) return { title: name.replace(/\.txt$/i, "").trim() };
+  const [, title, y, mo, d, h, mi, s] = m;
+  return { title: title.trim(), time: new Date(+y, +mo - 1, +d, +h, +mi, +s) };
 }
 
 export function expandHome(path: string): string {
@@ -123,6 +168,7 @@ export async function listRecordings(folder: string, since?: Date): Promise<Reco
     const header = parseKrispHeader(await readHead(found.path));
     const folder = splitStamp(entry.name);
     recordings.push({
+      source: "Krisp",
       name: entry.name,
       path: found.path,
       title: header.title || folder.title,
@@ -132,13 +178,38 @@ export async function listRecordings(folder: string, since?: Date): Promise<Reco
   return recordings.sort((a, b) => b.time.getTime() - a.time.getTime());
 }
 
+/**
+ * Recordings in the MacWhisper folder (its own .txt files, not subfolders),
+ * newest first; only those changed since `since` if given. Files changed in
+ * the last 2 minutes are left out as still recording.
+ */
+export async function listMacWhisperRecordings(folder: string, since?: Date, now = new Date()): Promise<Recording[]> {
+  const root = expandHome(folder);
+  const recordings: Recording[] = [];
+  for (const entry of await fs.readdir(root, { withFileTypes: true })) {
+    if (!entry.isFile() || !/\.txt$/i.test(entry.name)) continue;
+    const path = join(root, entry.name);
+    const stat = await fs.stat(path);
+    if (now.getTime() - stat.mtime.getTime() < SETTLE_MS || (since && stat.mtime < since)) continue;
+    const { title, time } = parseMacWhisperName(entry.name);
+    recordings.push({ source: "MacWhisper", name: entry.name, path, title, time: time ?? stat.birthtime });
+  }
+  return recordings.sort((a, b) => b.time.getTime() - a.time.getTime());
+}
+
+/** Identifies a recording across both sources. */
+export function recordingKey(recording: Pick<Recording, "source" | "name">): string {
+  return `${recording.source}:${recording.name}`;
+}
+
 const normalize = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
 /**
  * Recordings that could be the meeting's, best first: started from 10 minutes
- * before the meeting until it ends, ranked by matching title, then a start
- * from 2 minutes before to 7 minutes after the meeting's (the usual join
- * time), then the closest start.
+ * before the meeting until it ends, ranked by a Krisp recording with a
+ * matching title, then a start from 2 minutes before to 7 minutes after the
+ * meeting's (the usual join time), then the closest start. MacWhisper titles
+ * are often another meeting's, so for them a matching title only breaks ties.
  */
 export function candidateRecordings(recordings: Recording[], meeting: MeetingTime): Recording[] {
   const start = meeting.start.getTime();
@@ -148,23 +219,26 @@ export function candidateRecordings(recordings: Recording[], meeting: MeetingTim
     const other = normalize(r.title);
     return !!title && !!other && (other.includes(title) || title.includes(other));
   };
+  const trustedTitle = (r: Recording) => r.source === "Krisp" && titleMatches(r);
   const offset = (r: Recording) => r.time.getTime() - start;
   const onTime = (r: Recording) => offset(r) >= -JOIN_EARLY_MS && offset(r) <= JOIN_LATE_MS;
   return recordings
     .filter((r) => offset(r) >= -EARLIEST_MS && r.time.getTime() < end)
     .sort((a, b) =>
-      Number(titleMatches(b)) - Number(titleMatches(a)) ||
+      Number(trustedTitle(b)) - Number(trustedTitle(a)) ||
       Number(onTime(b)) - Number(onTime(a)) ||
-      Math.abs(offset(a)) - Math.abs(offset(b)));
+      Math.abs(offset(a)) - Math.abs(offset(b)) ||
+      Number(titleMatches(b)) - Number(titleMatches(a)));
 }
 
 export async function readTranscript(recording: Recording): Promise<string[]> {
-  return transcriptBody(await fs.readFile(recording.path, "utf8"));
+  const text = await fs.readFile(recording.path, "utf8");
+  return recording.source === "MacWhisper" ? macWhisperBody(text) : transcriptBody(text);
 }
 
 export function recordingLabel(recording: Recording): string {
   const when = recording.time.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
-  return `${recording.title} — ${when}`;
+  return `${when} · ${recording.title} (${recording.source})`;
 }
 
 /** A meeting note waiting for its transcript, and the recordings that could be it. */
@@ -182,8 +256,8 @@ export interface TranscriptProposal<F> {
 export function preselect<F>(proposals: TranscriptProposal<F>[]): Array<Recording | undefined> {
   const taken = new Set<string>();
   return proposals.map((p) => {
-    const choice = p.candidates.find((r) => !taken.has(r.name));
-    if (choice) taken.add(choice.name);
+    const choice = p.candidates.find((r) => !taken.has(recordingKey(r)));
+    if (choice) taken.add(recordingKey(choice));
     return choice;
   });
 }
@@ -192,7 +266,7 @@ export function preselect<F>(proposals: TranscriptProposal<F>[]): Array<Recordin
 export class RecordingSuggestModal extends FuzzySuggestModal<Recording> {
   constructor(app: App, private readonly recordings: Recording[], private readonly onChoose: (r: Recording) => void) {
     super(app);
-    this.setPlaceholder("Choose the Krisp recording for this meeting");
+    this.setPlaceholder("Choose the recording for this meeting");
   }
 
   getItems(): Recording[] {
@@ -227,12 +301,12 @@ export class TranscriptConfirmModal<F> extends Modal {
     private readonly onChooseOther?: () => void
   ) {
     super(app);
-    this.choices = preselect(proposals).map((r) => r?.name ?? SKIP);
+    this.choices = preselect(proposals).map((r) => (r ? recordingKey(r) : SKIP));
   }
 
   onOpen(): void {
     const { contentEl } = this;
-    this.titleEl.setText(this.proposals.length === 1 ? "Import Krisp transcript?" : "Import Krisp transcripts?");
+    this.titleEl.setText(this.proposals.length === 1 ? "Import transcript?" : "Import transcripts?");
     contentEl.createEl("p", { text: "Check each meeting's recording. Nothing is imported until you click Import." });
 
     this.proposals.forEach((proposal, i) => {
@@ -241,7 +315,7 @@ export class TranscriptConfirmModal<F> extends Modal {
         .setName(proposal.meeting.title)
         .setDesc(when)
         .addDropdown((drop) => {
-          for (const r of proposal.candidates) drop.addOption(r.name, recordingLabel(r));
+          for (const r of proposal.candidates) drop.addOption(recordingKey(r), recordingLabel(r));
           drop.addOption(SKIP, "Don't import");
           drop.setValue(this.choices[i]).onChange((value) => (this.choices[i] = value));
         });
@@ -263,7 +337,7 @@ export class TranscriptConfirmModal<F> extends Modal {
         const picks: Array<{ file: F; recording: Recording }> = [];
         const skipped: F[] = [];
         this.proposals.forEach((p, i) => {
-          const recording = p.candidates.find((r) => r.name === this.choices[i]);
+          const recording = p.candidates.find((r) => recordingKey(r) === this.choices[i]);
           if (recording) picks.push({ file: p.file, recording });
           else skipped.push(p.file);
         });

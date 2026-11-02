@@ -1,6 +1,6 @@
 # Meeting Notes for Apple Calendar
 
-An Obsidian plugin that turns your Apple Calendar into meeting notes: a note before every meeting, a Today panel with one-click join, Krisp transcripts, AI summaries by copy and paste, and action items tracked across all your meetings.
+An Obsidian plugin that turns your Apple Calendar into meeting notes: a note before every meeting, a Today panel with one-click join, Krisp and MacWhisper transcripts, AI summaries by copy and paste, and action items tracked across all your meetings.
 
 Reads events from **Apple Calendar on your Mac** — any account synced to Calendar.app, limited to the specific calendars you choose.
 
@@ -22,7 +22,7 @@ Reads events from **Apple Calendar on your Mac** — any account synced to Calen
 - **Next meeting in the status bar** — click it, or run **Join current or next meeting**, to open the note and join
 - **Meetings dashboard** — a ready-made Bases file of upcoming and recent meetings, by account, category, sentiment and outcome, customer meetings, and meetings still needing an AI summary ([guide](docs/DASHBOARDS.md))
 - **Today's meetings** — a sidebar of today's meetings (arrows step to other days) with one-click **Open note**, **Join** and **New note** buttons ([guide](docs/DASHBOARDS.md))
-- **Krisp transcripts** — fill a meeting's Transcript section from its Krisp recording, by command or automatically
+- **Krisp and MacWhisper transcripts** — fill a meeting's Transcript section from its Krisp or MacWhisper recording, by command or automatically
 - **AI summaries by copy and paste** — copy a meeting for Gemini, Claude, ChatGPT or Copilot (or your own agent), paste the reply back into Executive Summary, Next Steps, Summary by Topic, Key Decisions, Additional Items and Speakers, with its category, account, organizations, key topics, sentiment, outcome and speakers saved as properties; the plugin itself never goes online
 - **File notes anywhere** — move finished notes into your own folders; the plugin still finds them
 - **Skip rules** — no automatic notes for meetings titled Focus time, Lunch, etc., or with no one else invited
@@ -128,7 +128,7 @@ Full API access. Required for shared/workspace calendars or precise filtering.
 | Prepare my day each night | On, 12:30 AM | Builds My Day, creates the day's meeting notes with their brief and rebuilds the Tracker each night (Obsidian open, Mac on power); a missed night is caught up when Obsidian is next open. **Prepare now** runs it straight away |
 | Copy the Daily Briefing to | *(empty)* | A folder outside the vault — e.g. a Google Drive for desktop folder — where My Day is written as plain-text `Daily Briefing.md` each time it's rebuilt, for Gemini or another assistant to read |
 | Notify before a meeting | 5 minutes | A Mac notification before each meeting that opens its note and brief; 0 = off |
-| Notify after a meeting | On | 10 minutes after a meeting with no AI reply yet: import the Krisp transcript and add the reply |
+| Notify after a meeting | On | 10 minutes after a meeting with no AI reply yet: import the transcript and add the reply |
 | Morning summary | 8:30 AM | A notification with the day's meetings and what's due or overdue, opening My Day; clear to turn off |
 | Wrap-up reminder | 5:30 PM | A notification with how many of your items slipped, opening Wrap up my day; clear to turn off |
 | Hours in advance | 12 | Create notes for events starting within this many hours (1–48) |
@@ -155,11 +155,12 @@ Full API access. Required for shared/workspace calendars or precise filtering.
 | Days ahead to fetch | 7 | Look-ahead window for the event picker modal (1–30) |
 | Max events to show | 20 | Maximum events listed in the picker modal (1–50) |
 
-### Krisp Transcripts
+### Transcripts
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Krisp folder | `~/Documents/Transcripts/Krisp Meetings` | Where Krisp saves recordings on this Mac: one folder per meeting, each with a `transcript.txt` (or `transcript.md`) |
+| Krisp folder | `~/Documents/Transcripts/Krisp Meetings` | Where Krisp saves recordings on this Mac: one folder per meeting, each with a `transcript.txt` (or `transcript.md`). Empty: Krisp isn't used |
+| MacWhisper folder | `~/Documents/Transcripts/MacWhisper` | Where MacWhisper saves transcripts on this Mac: one `.txt` file per recording. Subfolders such as `ARCHIVE` are ignored. Empty: MacWhisper isn't used |
 | Import transcripts automatically | Off | After each sync, offer recordings for meetings that ended in the last 2 days with an empty **Transcript** section. You confirm every import. Off: only with the command |
 
 ### AI Assistant (copy and paste)
@@ -255,7 +256,7 @@ tags:
 - **Agenda** starts with the lines of the event description (when **Include event description** is on).
 - **Agenda** and **Notes** are yours to fill in.
 - **Executive Summary**, **Next Steps**, **Summary by Topic**, **Key Decisions**, **Additional Items** and **Speakers** follow the sections of an [AI agent's write-up](docs/AGENT_INSTRUCTIONS.md), so **Add AI reply** can fill each one — or write in them by hand. Next Steps are checkboxes, so Obsidian's task search and the Tasks plugin can collect them across meetings.
-- **Transcript** is the empty section at the end of the note, for the Krisp transcript or one from your AI note-taker.
+- **Transcript** is the empty section at the end of the note, for the Krisp or MacWhisper transcript or one from your AI note-taker.
 
 ### Custom templates
 
@@ -385,15 +386,17 @@ Cancelled, removed and declined meetings are left out of the meeting lists in th
 
 New notes are created in the **Note folder**, but you can move them anywhere in the vault once the meeting is done, as many folder levels deep as you like. The plugin finds meeting notes anywhere by their `calendar_event_id` property, so a filed note keeps its **Open note** button, its action items, its **Previous** link from the next meeting in the series, and its calendar updates. If a filed meeting moves to another day, the note is renamed in the folder you filed it in.
 
-### Krisp transcripts
+### Krisp and MacWhisper transcripts
 
-If you record meetings with Krisp, the plugin can copy a recording's transcript into the note's **Transcript** section. Set **Krisp folder** in settings (default `~/Documents/Transcripts/Krisp Meetings`), open the meeting note, and run **Import Krisp transcript into this note**.
+If you record meetings with Krisp or MacWhisper (or both), the plugin can copy a recording's transcript into the note's **Transcript** section. Set **Krisp folder** and/or **MacWhisper folder** in settings (defaults `~/Documents/Transcripts/Krisp Meetings` and `~/Documents/Transcripts/MacWhisper`), open the meeting note, and run **Import transcript into this note**. Recordings from both folders are offered together, each labelled with its start time, title and source, e.g. *Nov 2, 2026, 10:00 AM · Productivity Block (MacWhisper)*.
 
 - **Nothing is imported without your OK.** A window shows the meeting and the recording it found, with a dropdown of other likely recordings and **Don't import**. Click **Import** to go ahead, or **Choose another recording…** to pick from every recording.
-- Recordings are matched by the start time in the transcript header (or folder name). Any recording started from 10 minutes before the meeting until it ends is offered, best first: a matching title, then a start within the usual join window (2 minutes early to 7 minutes late), then the closest start. Generic titles like "Zoom meeting" are fine — back-to-back meetings each get the recording that started nearest their own start, and a recording that started after a meeting ended is never offered for it.
-- Only the transcript is copied; Krisp's header (title, time, length) is left out.
+- Recordings are matched by start time: from the transcript header (or folder name) for Krisp, from the file name (`Productivity Block 2026-11-02 10_00_13.txt`) for MacWhisper. Any recording started from 10 minutes before the meeting until it ends is offered, best first: a Krisp recording with a matching title, then a start within the usual join window (2 minutes early to 7 minutes late), then the closest start. Generic titles like "Zoom meeting" are fine — back-to-back meetings each get the recording that started nearest their own start, and a recording that started after a meeting ended is never offered for it.
+- MacWhisper names a recording after whatever calendar event was on at the time, which isn't always the right one, so its titles only break ties between equally close recordings.
+- A MacWhisper file changed in the last 2 minutes isn't offered — it's probably still recording.
+- Only the transcript is copied; Krisp's header (title, time, length) is left out. MacWhisper's back-to-back lines from the same speaker are joined into one paragraph, e.g. **Speaker 2:** I said it was the best. I would believe you.
 - The transcript only goes into an empty Transcript section; clear the section to import again.
-- The note records which recording it came from (`krisp_recording`), so the same recording isn't offered for another meeting.
+- The note records which tool and recording it came from (`transcript_source: Krisp` or `MacWhisper`, and `transcript_recording`), so the same recording isn't offered for another meeting. Notes imported before 6.26 keep their `krisp_recording` property, which still counts.
 - Turn on **Import transcripts automatically** to be offered transcripts after every sync, for all meetings that ended in the last 2 days, in one window. Double-booked meetings never start with the same recording selected. Meetings you skip (or close the window on) aren't offered again until Obsidian restarts. It's off until you turn it on.
 
 ### AI summaries (copy and paste)
@@ -404,7 +407,7 @@ Use any AI assistant your organization approves — Gemini, Claude, ChatGPT, Cop
 2. Paste it into your assistant, then copy its whole reply.
 3. Click the **Add AI reply** icon (clipboard with a page) next to it.
 
-Every meeting note's header also has an **Import Krisp transcript** icon (a file with a sound wave). All three are commands too (**Cmd + P**), for hotkeys.
+Every meeting note's header also has an **Import transcript** icon (a file with a sound wave). All three are commands too (**Cmd + P**), for hotkeys.
 
 The reply has six sections — **Executive Summary**, **Next Steps**, **Summary (by topic)**, **Key Decisions/Agreements**, **Additional Items** and **Speakers** — both from the built-in instructions and from your own agent (see **[AI agent instructions](docs/AGENT_INSTRUCTIONS.md)**). Each goes into the note section of the same name:
 
@@ -444,7 +447,7 @@ Both steps are optional. The note's sections are there for you to write in by ha
 | **Refresh meeting brief** | In an upcoming meeting's note, rebuilds its **Meeting Brief**: the account's state, where you left off, what attendees owe you and what you owe — see [Meeting Brief](docs/DASHBOARDS.md#meeting-brief) |
 
 The tracker, insights, weekly reviews, series notes and account overviews also rebuild themselves whenever you open them, however you get there, and have a **↻** icon at the top right to rebuild them while open. Their open items are checkboxes: ticking one checks it off in its meeting note. **Add AI reply** updates the overview of the account it saves — see [Keeping the Meeting Hub notes current](docs/DASHBOARDS.md#keeping-the-meeting-hub-notes-current).
-| **Import Krisp transcript into this note** | Suggests the open note's Krisp recording and, once you confirm, fills its empty Transcript section — see [Krisp transcripts](#krisp-transcripts) |
+| **Import transcript into this note** | Suggests the open note's Krisp or MacWhisper recording and, once you confirm, fills its empty Transcript section — see [Krisp and MacWhisper transcripts](#krisp-and-macwhisper-transcripts) |
 | **Copy meeting for AI assistant** | Copies the open note's meeting details, notes and transcript (and, if switched on, the instructions) — see [AI summaries](#ai-summaries-copy-and-paste) |
 | **Add AI reply to this meeting** | Files the AI reply on the clipboard into the open note's Executive Summary, Next Steps, Summary by Topic, Key Decisions, Additional Items and Speakers |
 
@@ -473,7 +476,7 @@ New to these? **[Dashboards — a step-by-step guide](docs/DASHBOARDS.md)** expl
 
 ### Today's meetings
 
-Click the **calendar-with-clock** button in the left ribbon (or run **Open today's meetings**). A panel in the right sidebar lists today's meetings in order: finished ones faded, the current one marked **Now**. Under each title is a link to the meeting's note or, if it has none, **Note deleted**, **No note was created** (past meetings) or **Note not created yet** (meetings still to come), so stepping back through past days finds meetings whose note you deleted. Each has an **Open note** (or **Create note**, or **Recreate note** for a deleted one) button and, while the meeting is still to come or in progress, a **Join** button. Use the **‹** / **›** arrows beside the date to see the day before or after, and **Today** to come back. **New note** asks for a title and creates a note from your template for a meeting that isn't on your calendar, dated on the day shown. Once a meeting has started and has a note, it also gets three small buttons: **Import Krisp transcript**, **Copy meeting for AI assistant** and **Add AI reply** (hover for the name). It re-reads the calendar every 5 minutes, or straight away with **Refresh**.
+Click the **calendar-with-clock** button in the left ribbon (or run **Open today's meetings**). A panel in the right sidebar lists today's meetings in order: finished ones faded, the current one marked **Now**. Under each title is a link to the meeting's note or, if it has none, **Note deleted**, **No note was created** (past meetings) or **Note not created yet** (meetings still to come), so stepping back through past days finds meetings whose note you deleted. Each has an **Open note** (or **Create note**, or **Recreate note** for a deleted one) button and, while the meeting is still to come or in progress, a **Join** button. Use the **‹** / **›** arrows beside the date to see the day before or after, and **Today** to come back. **New note** asks for a title and creates a note from your template for a meeting that isn't on your calendar, dated on the day shown. Once a meeting has started and has a note, it also gets three small buttons: **Import transcript**, **Copy meeting for AI assistant** and **Add AI reply** (hover for the name). It re-reads the calendar every 5 minutes, or straight away with **Refresh**.
 
 ### Meetings dashboard
 
@@ -517,7 +520,7 @@ If the plugin can't read your calendar during a background check, it shows one n
 | Mode | Data handling |
 |------|--------------|
 | Apple Calendar | All data stays on-device. No network requests are made by the plugin; Calendar.app manages its own syncing independently. |
-| Krisp and AI assistants | Krisp transcripts are read from a folder on this Mac. Meetings are only copied to your clipboard for an AI assistant; you choose where to paste them. |
+| Transcripts and AI assistants | Krisp and MacWhisper transcripts are read from folders on this Mac. Meetings are only copied to your clipboard for an AI assistant; you choose where to paste them. |
 | iCal URL | The plugin fetches your iCal URL directly from Obsidian. The URL is stored encrypted in your vault. |
 | OAuth | Access tokens are stored encrypted in your vault. The plugin requests read-only scope (`calendar.readonly`). No data is sent to any third-party server. |
 

@@ -11,7 +11,7 @@ import {
   WorkspaceLeaf,
 } from "./support/obsidianStub";
 import { createMemoryApp, buildEvent } from "./support/testHelpers";
-import { mkdtemp, mkdir, writeFile, rm } from "fs/promises";
+import { mkdtemp, mkdir, writeFile, rm, utimes } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 
@@ -234,6 +234,8 @@ function appleSettings(overrides: Partial<typeof DEFAULT_SETTINGS> = {}) {
     authMode: "apple" as const,
     noteFolder: "Meeting Notes",
     processedEventIds: [],
+    krispFolder: "",
+    macWhisperFolder: "",
     ...overrides,
   };
 }
@@ -732,12 +734,56 @@ test("Krisp transcripts are only proposed, never written, until an import is con
 
     assert.equal(await plugin.importTranscripts([{ file: note as never, recording: proposals[0].candidates[0] }]), 1);
     assert.match(note.content ?? "", /## Transcript\n\nYou\n0:01 - hello\n$/);
-    assert.match(note.content ?? "", new RegExp(`^krisp_recording: "${folder}"$`, "m"));
+    assert.match(note.content ?? "", new RegExp(`^transcript_recording: "${folder}"$`, "m"));
+    assert.match(note.content ?? "", /^transcript_source: "Krisp"$/m);
     assert.match(note.content ?? "", /## Notes\n\n- \n/);
 
     assert.deepEqual(await plugin.transcriptProposals(), []);
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("MacWhisper transcripts are matched by time, joined by speaker, and kept apart from Krisp recordings", async () => {
+  const krisp = await mkdtemp(join(tmpdir(), "krisp-main-"));
+  const whisper = await mkdtemp(join(tmpdir(), "macwhisper-main-"));
+  try {
+    const old = new Date(2026, 3, 2, 12, 0);
+    const save = async (name: string, text: string) => {
+      await writeFile(join(whisper, name), text);
+      await utimes(join(whisper, name), old, old);
+    };
+    await save("Budget 2026-04-02 10_00_13.txt", "Speaker 1\nHello\n\nSpeaker 1\nthere.\n\nAlex Doe\nHi.\n");
+    await save("Budget 2026-04-02 09_31_48.txt", "Speaker 1\nEarlier meeting\n");
+    await mkdir(join(whisper, "ARCHIVE"));
+    await writeFile(join(whisper, "ARCHIVE", "Sync 2026-04-02 10_01_00.txt"), "Speaker 1\narchived\n");
+    await mkdir(join(krisp, "Sync - April 2, 2026 9-31-00 AM"));
+    await writeFile(join(krisp, "Sync - April 2, 2026 9-31-00 AM", "transcript.txt"), "Sync\nApril 2, 2026 9:31:00 AM\n30m\n\nYou\n0:01 - hi");
+
+    const noteText = (title: string, start: string, end: string, extra = "") =>
+      `---\ntitle: "${title}"\nstart: ${start}\nend: ${end}\ncalendar_event_id: "${title}"\n${extra}---\n\n## Notes\n\n- \n\n## Transcript\n\n`;
+    const app = createMemoryApp([
+      { path: "M/Design Review.md", content: noteText("Design Review", "2026-04-02T10:00", "2026-04-02T11:00") },
+      { path: "M/Earlier.md", content: noteText("Earlier", "2026-04-02T09:30", "2026-04-02T10:00", 'krisp_recording: "Budget 2026-04-02 09_31_48.txt"\n') },
+    ]);
+    const plugin = createPlugin(app);
+    plugin.settings = appleSettings({ krispFolder: krisp, macWhisperFolder: whisper });
+    plugin.now = () => new Date(2026, 3, 2, 14, 0);
+    const note = app.files.get("M/Design Review.md") as TFile;
+
+    const proposals = await plugin.transcriptProposals();
+    assert.deepEqual(proposals.map((p) => [p.file.path, p.candidates.map((r) => `${r.source}:${r.name}`)]), [
+      ["M/Earlier.md", ["Krisp:Sync - April 2, 2026 9-31-00 AM", "MacWhisper:Budget 2026-04-02 09_31_48.txt"]],
+      ["M/Design Review.md", ["MacWhisper:Budget 2026-04-02 10_00_13.txt"]],
+    ], "a krisp_recording with a MacWhisper file's name doesn't hide that file; the archive is ignored");
+
+    assert.equal(await plugin.importTranscripts([{ file: note as never, recording: proposals[1].candidates[0] }]), 1);
+    assert.match(note.content ?? "", /## Transcript\n\n\*\*Speaker 1:\*\* Hello there\.\n\n\*\*Alex Doe:\*\* Hi\.\n$/);
+    assert.match(note.content ?? "", /^transcript_source: "MacWhisper"$/m);
+    assert.match(note.content ?? "", /^transcript_recording: "Budget 2026-04-02 10_00_13.txt"$/m);
+  } finally {
+    await rm(krisp, { recursive: true, force: true });
+    await rm(whisper, { recursive: true, force: true });
   }
 });
 
@@ -750,6 +796,7 @@ test("loadSettings keeps every note section on unless switched off", async () =>
   });
   assert.equal(plugin.settings.skipSolo, false);
   assert.equal(plugin.settings.krispFolder, "~/Documents/Transcripts/Krisp Meetings");
+  assert.equal(plugin.settings.macWhisperFolder, "~/Documents/Transcripts/MacWhisper");
   assert.equal(plugin.settings.krispAutoImport, false);
   assert.equal(plugin.settings.aiIncludeInstructions, true);
   assert.equal(plugin.settings.aiInstructions, "");
@@ -812,7 +859,7 @@ test("Open meeting tracker builds the tracker from notes anywhere and rebuilds i
   assert.match(tracker.content ?? "", /\| 0 \| 0 \| 0 \| 0 \|/);
 });
 
-test("meeting notes get Krisp, copy and add-reply icons in their header; other notes don't", () => {
+test("meeting notes get transcript, copy and add-reply icons in their header; other notes don't", () => {
   const app = createMemoryApp([
     { path: "Clients/Sync.md", content: "---\ntitle: \"Sync\"\ncalendar_event_id: \"sync\"\n---\n" },
     { path: "Ideas.md", content: "Just a note" },
@@ -831,7 +878,7 @@ test("meeting notes get Krisp, copy and add-reply icons in their header; other n
   assert.deepEqual(meetingView.actions.map((a) => a.title), [
     "Add AI reply to this meeting",
     "Copy meeting for AI assistant",
-    "Import Krisp transcript into this note",
+    "Import transcript into this note",
   ], "added once, in reverse so they read left to right");
   assert.equal(otherView.actions.length, 0);
 
@@ -1604,7 +1651,7 @@ test("notifications: before a meeting, after one that has no AI reply yet, and t
   assert.match(shown[1], /^Pilot at 10:00 AM \| Click to open the note\.$/);
   at(10, 41);
   await plugin.checkNotifications();
-  assert.match(shown[2], /^Pilot has ended \| Import the Krisp transcript and add the AI reply/);
+  assert.match(shown[2], /^Pilot has ended \| Import the transcript and add the AI reply/);
   assert.equal(shown.length, 3);
   at(17, 35);
   await plugin.checkNotifications();

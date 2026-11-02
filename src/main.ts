@@ -22,9 +22,12 @@ import { homedir } from "os";
 import { join } from "path";
 import {
   candidateRecordings,
+  listMacWhisperRecordings,
   listRecordings,
   readTranscript,
   Recording,
+  recordingKey,
+  type RecordingSource,
   RecordingSuggestModal,
   TranscriptConfirmModal,
   type MeetingTime,
@@ -138,7 +141,7 @@ const RIBBON_ICONS: Array<[string, string, (plugin: GoogleCalendarPlugin) => unk
   ["calendar-check", "This week's review", (p) => p.openWeeklyReview(0)],
   ["trending-up", "Meeting insights: accounts, time spent and trends", (p) => p.openInsights()],
 ];
-/** The after-meeting notification comes this long after the meeting ends, once Krisp has had time to finish. */
+/** The after-meeting notification comes this long after the meeting ends, once the transcript has had time to finish. */
 const AFTER_MEETING_MS = 10 * 60 * 1_000;
 /** The Meeting Brief refreshes itself when its note is opened this long before the meeting starts. */
 const BRIEF_REFRESH_BEFORE_MS = 60 * 60 * 1_000;
@@ -151,7 +154,7 @@ function managedPart(content: string): string {
 
 /** A Meeting Hub note rebuilt this recently isn't rebuilt again when it opens. */
 const HUB_REBUILT_RECENTLY_MS = 5_000;
-/** Automatic Krisp import looks at meetings that ended within this long. */
+/** Automatic transcript import looks at meetings that ended within this long. */
 const KRISP_LOOKBACK_MS = 2 * 24 * 60 * 60 * 1_000;
 
 function frontmatterDate(value: unknown): Date | undefined {
@@ -375,8 +378,8 @@ export default class GoogleCalendarPlugin extends Plugin {
 
     this.addCommand({
       id: "import-krisp-transcript",
-      name: "Import Krisp transcript into this note",
-      callback: () => this.withActiveNote((file) => this.importKrispTranscript(file)),
+      name: "Import transcript into this note",
+      callback: () => this.withActiveNote((file) => this.importTranscript(file)),
     });
 
     this.addCommand({
@@ -982,7 +985,7 @@ export default class GoogleCalendarPlugin extends Plugin {
     try {
       recordings = (await this.transcriptProposals()).length;
     } catch {
-      // The Krisp folder can't be read: no loose end to show.
+      // The transcript folders can't be read: no loose end to show.
     }
     const content = dayNote({
       date,
@@ -1130,7 +1133,7 @@ export default class GoogleCalendarPlugin extends Plugin {
       if (this.settings.notifyAfterMeeting && note && now.getTime() >= followUp && now.getTime() - followUp < 30 * 60_000
         && !this.notified.has(`after:${event.id}`) && !this.app.metadataCache.getFileCache(note)?.frontmatter?.ai_summarized) {
         this.notified.add(`after:${event.id}`);
-        this.notify(`${title} has ended`, "Import the Krisp transcript and add the AI reply. Click to open the note.", openNote(note));
+        this.notify(`${title} has ended`, "Import the transcript and add the AI reply. Click to open the note.", openNote(note));
       }
     }
 
@@ -1376,7 +1379,7 @@ export default class GoogleCalendarPlugin extends Plugin {
       new Notice("Calendar Notes: This meeting has no note yet — click Create note first.");
       return;
     }
-    if (action === "transcript") await this.importKrispTranscript(file);
+    if (action === "transcript") await this.importTranscript(file);
     else if (action === "copy") await this.copyForAssistant(file);
     else await this.addAssistantReply(file);
   }
@@ -1410,7 +1413,7 @@ export default class GoogleCalendarPlugin extends Plugin {
 
   /**
    * Show one-click icons in the header of every open meeting note (a note
-   * with a calendar_event_id): import the Krisp transcript, copy the meeting
+   * with a calendar_event_id): import the transcript, copy the meeting
    * for an AI assistant, and add the assistant's reply. Meeting Hub notes get
    * a refresh icon. Other notes get none.
    */
@@ -1440,7 +1443,7 @@ export default class GoogleCalendarPlugin extends Plugin {
         : [
             view.addAction("clipboard-paste", "Add AI reply to this meeting", run(this.addAssistantReply)),
             view.addAction("clipboard-copy", "Copy meeting for AI assistant", run(this.copyForAssistant)),
-            view.addAction("file-audio", "Import Krisp transcript into this note", run(this.importKrispTranscript)),
+            view.addAction("file-audio", "Import transcript into this note", run(this.importTranscript)),
             ...(kind.startsWith("recurring") ? [view.addAction("repeat", "Open series note", run(this.openSeriesNoteForFile))] : []),
             ...(kind.endsWith("+brief") ? [view.addAction("clipboard-list", "Refresh meeting brief", run(this.refreshBriefNow))] : []),
           ];
@@ -1563,7 +1566,7 @@ export default class GoogleCalendarPlugin extends Plugin {
     for (const key of Object.keys(merged.noteSections) as Array<keyof typeof merged.noteSections>) {
       if (typeof sections[key] === "boolean") merged.noteSections[key] = sections[key] as boolean;
     }
-    for (const key of ["skipTitles", "krispFolder", "aiInstructions"] as const) {
+    for (const key of ["skipTitles", "krispFolder", "macWhisperFolder", "aiInstructions"] as const) {
       if (typeof merged[key] !== "string") merged[key] = DEFAULT_SETTINGS[key];
     }
     for (const key of ["skipSolo", "krispAutoImport", "aiIncludeInstructions", "aiSaveProperties"] as const) {
@@ -2154,7 +2157,7 @@ export default class GoogleCalendarPlugin extends Plugin {
   }
 
   // ---------------------------------------------------------------------------
-  // Krisp transcripts and the AI assistant round trip
+  // Krisp and MacWhisper transcripts and the AI assistant round trip
   // ---------------------------------------------------------------------------
 
   private withActiveNote(run: (file: TFile) => Promise<void>): void {
@@ -2175,12 +2178,15 @@ export default class GoogleCalendarPlugin extends Plugin {
     return { title: typeof fm?.title === "string" ? fm.title : file.basename, start, end };
   }
 
-  /** Recording folders already imported into a note. */
+  /** Keys of the recordings already imported into a note, including those recorded as krisp_recording before 6.26. */
   private usedRecordings(): Set<string> {
     const used = new Set<string>();
     for (const { file } of findMeetingNotes(this.app)) {
-      const name = this.app.metadataCache.getFileCache(file)?.frontmatter?.krisp_recording;
-      if (typeof name === "string") used.add(name);
+      const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+      if (typeof fm?.krisp_recording === "string") used.add(recordingKey({ source: "Krisp", name: fm.krisp_recording }));
+      if (typeof fm?.transcript_recording === "string" && (fm.transcript_source === "Krisp" || fm.transcript_source === "MacWhisper")) {
+        used.add(recordingKey({ source: fm.transcript_source, name: fm.transcript_recording }));
+      }
     }
     return used;
   }
@@ -2190,7 +2196,11 @@ export default class GoogleCalendarPlugin extends Plugin {
     const lines = await readTranscript(recording);
     if (lines.length === 0) return false;
     await this.app.vault.process(file, (content) =>
-      setFrontmatterValue(appendToSection(content, TRANSCRIPT_SECTIONS, lines), "krisp_recording", recording.name)
+      setFrontmatterValue(
+        setFrontmatterValue(appendToSection(content, TRANSCRIPT_SECTIONS, lines), "transcript_source", recording.source),
+        "transcript_recording",
+        recording.name
+      )
     );
     return true;
   }
@@ -2207,23 +2217,47 @@ export default class GoogleCalendarPlugin extends Plugin {
         new Notice(`Calendar Notes: Couldn't import the transcript — ${safeErrorMessage(err)}`);
       }
     }
-    if (imported > 0) new Notice(`Calendar Notes: Imported ${imported} Krisp transcript${imported !== 1 ? "s" : ""}.`);
+    if (imported > 0) new Notice(`Calendar Notes: Imported ${imported} transcript${imported !== 1 ? "s" : ""}.`);
     return imported;
   }
 
+  private transcriptFolders(): Array<{ source: RecordingSource; folder: string }> {
+    return [
+      { source: "Krisp" as const, folder: this.settings.krispFolder.trim() },
+      { source: "MacWhisper" as const, folder: this.settings.macWhisperFolder.trim() },
+    ].filter((f) => f.folder);
+  }
+
+  /**
+   * Recordings from every transcript folder set, newest first. A folder that
+   * can't be read is skipped; only if none can be read is the error thrown.
+   */
+  async listAllRecordings(since?: Date): Promise<Recording[]> {
+    const folders = this.transcriptFolders();
+    const results = await Promise.allSettled(folders.map(({ source, folder }) =>
+      source === "Krisp" ? listRecordings(folder, since) : listMacWhisperRecordings(folder, since, this.now())));
+    const failed = results.flatMap((r, i) => (r.status === "rejected" ? [{ ...folders[i], err: r.reason as unknown }] : []));
+    if (folders.length > 0 && failed.length === folders.length) {
+      throw new Error(failed.map((f) => `${f.source} folder: ${safeErrorMessage(f.err)}`).join("; "));
+    }
+    for (const f of failed) console.warn(`[CalendarNoteIntegration] Couldn't read the ${f.source} folder:`, f.err);
+    return results
+      .flatMap((r) => (r.status === "fulfilled" ? r.value : []))
+      .sort((a, b) => b.time.getTime() - a.time.getTime());
+  }
+
   private async readRecordings(): Promise<Recording[] | undefined> {
-    const folder = this.settings.krispFolder.trim();
     try {
-      return await listRecordings(folder);
+      return await this.listAllRecordings();
     } catch (err) {
-      new Notice(`Calendar Notes: Couldn't read the Krisp folder — ${safeErrorMessage(err)}`);
+      new Notice(`Calendar Notes: Couldn't read the transcript folders — ${safeErrorMessage(err)}`);
       return undefined;
     }
   }
 
-  async importKrispTranscript(file: TFile): Promise<void> {
-    if (!this.settings.krispFolder.trim()) {
-      new Notice("Calendar Notes: Set your Krisp folder in the plugin settings first.");
+  async importTranscript(file: TFile): Promise<void> {
+    if (this.transcriptFolders().length === 0) {
+      new Notice("Calendar Notes: Set your Krisp or MacWhisper folder in the plugin settings first.");
       return;
     }
     if (sectionText(await this.app.vault.read(file), TRANSCRIPT_SECTIONS)) {
@@ -2233,7 +2267,7 @@ export default class GoogleCalendarPlugin extends Plugin {
     const recordings = await this.readRecordings();
     if (!recordings) return;
     if (recordings.length === 0) {
-      new Notice(`Calendar Notes: No Krisp recordings found in ${this.settings.krispFolder}.`);
+      new Notice("Calendar Notes: No recordings found in your Krisp or MacWhisper folder.");
       return;
     }
 
@@ -2241,7 +2275,7 @@ export default class GoogleCalendarPlugin extends Plugin {
       new RecordingSuggestModal(this.app, recordings, (recording) => void this.importTranscripts([{ file, recording }])).open();
     const meeting = this.noteMeeting(file);
     const used = this.usedRecordings();
-    const candidates = meeting ? candidateRecordings(recordings.filter((r) => !used.has(r.name)), meeting) : [];
+    const candidates = meeting ? candidateRecordings(recordings.filter((r) => !used.has(recordingKey(r))), meeting) : [];
     if (!meeting || candidates.length === 0) {
       pickAny();
       return;
@@ -2272,13 +2306,13 @@ export default class GoogleCalendarPlugin extends Plugin {
 
     let recordings: Recording[];
     try {
-      recordings = await listRecordings(this.settings.krispFolder, since);
+      recordings = await this.listAllRecordings(since);
     } catch (err) {
-      console.warn("[CalendarNoteIntegration] Couldn't read the Krisp folder:", err);
+      console.warn("[CalendarNoteIntegration] Couldn't read the transcript folders:", err);
       return [];
     }
     const used = this.usedRecordings();
-    const free = recordings.filter((r) => !used.has(r.name));
+    const free = recordings.filter((r) => !used.has(recordingKey(r)));
     const proposals: TranscriptProposal<TFile>[] = [];
     for (const { file, meeting } of ended) {
       const candidates = candidateRecordings(free, meeting);
@@ -2291,7 +2325,7 @@ export default class GoogleCalendarPlugin extends Plugin {
 
   /** With automatic import on, ask to import any transcripts found; never imports without confirmation. */
   async offerTranscripts(): Promise<void> {
-    if (!this.settings.krispAutoImport || !this.settings.krispFolder.trim() || this.transcriptOfferOpen) return;
+    if (!this.settings.krispAutoImport || this.transcriptFolders().length === 0 || this.transcriptOfferOpen) return;
     const proposals = await this.transcriptProposals();
     if (proposals.length === 0) return;
     this.transcriptOfferOpen = true;

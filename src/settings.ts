@@ -101,7 +101,9 @@ export interface GoogleCalendarSettings {
   skipSolo: boolean;
   /** Folder Krisp saves recordings in (one subfolder per recording). */
   krispFolder: string;
-  /** Offer Krisp transcripts for recent meetings after every sync (always confirmed). */
+  /** Folder MacWhisper saves transcripts in (one .txt file per recording). */
+  macWhisperFolder: string;
+  /** Offer Krisp and MacWhisper transcripts for recent meetings after every sync (always confirmed). */
   krispAutoImport: boolean;
   /** Put the instructions in front of the meeting when copying it for an AI assistant. */
   aiIncludeInstructions: boolean;
@@ -158,6 +160,7 @@ export const DEFAULT_SETTINGS: GoogleCalendarSettings = {
   skipTitles: "",
   skipSolo: false,
   krispFolder: "~/Documents/Transcripts/Krisp Meetings",
+  macWhisperFolder: "~/Documents/Transcripts/MacWhisper",
   krispAutoImport: false,
   aiIncludeInstructions: true,
   aiInstructions: "",
@@ -775,7 +778,7 @@ export class GoogleCalendarSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Notify after a meeting")
-      .setDesc("10 minutes after a meeting ends, if its note has no AI reply yet: a reminder to import the Krisp transcript and add the reply.")
+      .setDesc("10 minutes after a meeting ends, if its note has no AI reply yet: a reminder to import the transcript and add the reply.")
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.notifyAfterMeeting).onChange(async (value) => {
           this.plugin.settings.notifyAfterMeeting = value;
@@ -1155,15 +1158,15 @@ export class GoogleCalendarSettingTab extends PluginSettingTab {
           });
       });
 
-    // ----- Krisp Transcripts -----------------------------------------------
-    containerEl.createEl("h3", { text: "Krisp Transcripts" });
+    // ----- Transcripts -----------------------------------------------------
+    containerEl.createEl("h3", { text: "Transcripts" });
 
     new Setting(containerEl)
       .setName("Krisp folder")
       .setDesc(
         "The folder on this Mac where Krisp saves recordings (one folder per recording, each " +
-          "with a transcript.txt or transcript.md). Run Import Krisp transcript on a meeting note to fill its " +
-          "Transcript section. ~ means your home folder."
+          "with a transcript.txt or transcript.md). Run Import transcript on a meeting note to fill its " +
+          "Transcript section. Leave empty if you don't use Krisp. ~ means your home folder."
       )
       .addText((text) => {
         text.inputEl.style.width = "100%";
@@ -1177,9 +1180,27 @@ export class GoogleCalendarSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
+      .setName("MacWhisper folder")
+      .setDesc(
+        "The folder on this Mac where MacWhisper saves transcripts (one .txt file per recording; " +
+          "subfolders such as ARCHIVE are ignored). MacWhisper recordings are matched by start time, " +
+          "not title. Leave empty if you don't use MacWhisper. ~ means your home folder."
+      )
+      .addText((text) => {
+        text.inputEl.style.width = "100%";
+        text
+          .setPlaceholder("~/Documents/Transcripts/MacWhisper")
+          .setValue(this.plugin.settings.macWhisperFolder)
+          .onChange(async (value) => {
+            this.plugin.settings.macWhisperFolder = value.trim();
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
       .setName("Import transcripts automatically")
       .setDesc(
-        "After each sync, offer the Krisp recordings of meetings that ended in the last 2 days " +
+        "After each sync, offer the Krisp and MacWhisper recordings of meetings that ended in the last 2 days " +
           "and have an empty Transcript section. You always confirm (or change) each match " +
           "before anything is imported. Off: only when you run the command."
       )

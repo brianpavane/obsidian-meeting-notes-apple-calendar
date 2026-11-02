@@ -99,7 +99,7 @@ export type NoteAction = "transcript" | "copy" | "reply";
 
 /** Follow-up buttons on a meeting that has started: icon, label, action. */
 const FOLLOW_UPS: Array<[string, string, NoteAction]> = [
-  ["file-audio", "Import Krisp transcript", "transcript"],
+  ["file-audio", "Import transcript", "transcript"],
   ["clipboard-copy", "Copy meeting for AI assistant", "copy"],
   ["clipboard-paste", "Add AI reply", "reply"],
 ];

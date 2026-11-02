@@ -45,7 +45,7 @@ test("My Day lists the day's meetings, your focus, what attendees owe you, other
   assert.match(section("Before your meetings"), /### 9:00 AM · Acme pilot\n\n- \[ \] Send runbook @\[\[Ann Lee\]\] · 📅 2026-10-08 · [^\n]+\*overdue\*/);
   assert.doesNotMatch(section("Before your meetings"), /Beta thing/, "another account's items stay out");
   assert.match(section("Waiting on others: overdue"), /Chase legal[\s\S]*Send runbook|Send runbook[\s\S]*Chase legal/);
-  assert.match(section("Loose ends"), /- Add the AI reply: \[\[M\/Friday sync\|Friday sync\]\] · 2026-10-11\n- 2 Krisp recordings to import/);
+  assert.match(section("Loose ends"), /- Add the AI reply: \[\[M\/Friday sync\|Friday sync\]\] · 2026-10-11\n- 2 recordings to import/);
   assert.match(section("Done today"), /- Book room/);
 });
 

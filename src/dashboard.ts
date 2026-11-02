@@ -9,6 +9,11 @@ export const DASHBOARD_FILENAME = "Meetings.base";
 export const DASHBOARD_CONTENT = `filters:
   and:
     - 'file.hasProperty("calendar_event_id")'
+formulas:
+  transcript: 'if(note.transcript_source, note.transcript_source, if(note.krisp_recording, "Krisp", ""))'
+properties:
+  formula.transcript:
+    displayName: Transcript
 views:
   - type: table
     name: Next 7 days
@@ -118,7 +123,7 @@ views:
     order:
       - file.name
       - note.start
-      - note.krisp_recording
+      - formula.transcript
       - note.attendees
     groupBy:
       property: note.date
