@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+**Add AI reply works with a reply selected and copied from the chat window**
+A reply copied by selecting it in the assistant's window, instead of with its copy button, loses its Markdown in plain text. Headings, bullets and tables arrive as bare lines, so Add AI reply said the clipboard didn't hold a reply it understands. When the plain text can't be read, the plugin now reads the formatted copy on the clipboard and turns it back into Markdown, including the Speakers table. Replies copied with the copy button are filed exactly as before.
+
+---
+
 ## [6.26.0] – 2026-11-02
 
 ### Added

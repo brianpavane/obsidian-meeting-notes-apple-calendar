@@ -7,6 +7,7 @@ import {
   getNotices,
   MarkdownView,
   resetObsidianTestState,
+  setHtmlToMarkdownMock,
   TFile,
   WorkspaceLeaf,
 } from "./support/obsidianStub";
@@ -914,6 +915,44 @@ test("the Today panel's follow-up buttons copy and add replies for the meeting's
 
   await plugin.meetingNoteAction(buildEvent({ id: "missing" }), "copy");
   assert.match(getNotices().at(-1)?.message ?? "", /no note yet/);
+});
+
+test("Add AI reply reads the formatted copy when the plain text has lost its Markdown", async () => {
+  const app = createMemoryApp([
+    { path: "Clients/2026/Sync.md", content: "---\ntitle: \"Sync\"\ncalendar_event_id: \"sync\"\n---\n\n## Notes\n\n- Mine\n\n## Action items\n\n- [ ] \n\n## Transcript\n\n" },
+  ]);
+  const plugin = createPlugin(app);
+  plugin.settings = appleSettings();
+  const file = app.files.get("Clients/2026/Sync.md") as TFile;
+  let plain = "1. Executive Summary\nWe met.\n2. Next Steps\nJane Doe: Send the deck";
+  let htmlReads = 0;
+  const html = "<p><strong>1. Executive Summary</strong></p><p>We met.</p>";
+  Object.defineProperty(globalThis, "navigator", {
+    value: {
+      clipboard: {
+        readText: async () => plain,
+        read: async () => {
+          htmlReads++;
+          return [{ types: ["text/plain", "text/html"], getType: async () => ({ text: async () => html }) }];
+        },
+      },
+    },
+    configurable: true,
+  });
+  const converted: string[] = [];
+  setHtmlToMarkdownMock((h) => {
+    converted.push(h);
+    return "**1\\. Executive Summary**\n\nWe met.\n\n**2\\. Next Steps**\n\n-   **\\[\\[Jane Doe\\]\\]**: Send the deck\n";
+  });
+
+  await plugin.addAssistantReply(file as never);
+  assert.deepEqual(converted, [html]);
+  assert.match(file.content ?? "", /## Action items\n\n- \[ \] Send the deck @\[\[Jane Doe\]\] ➕ 2026-04-03\n/);
+  assert.match(file.content ?? "", /We met\./);
+
+  plain = "## Summary\nDone.";
+  await plugin.addAssistantReply(file as never);
+  assert.equal(htmlReads, 1, "a plain-text reply that parses is used as it is");
 });
 
 test("Open this week's review creates the Weekly Reviews folder and keeps the user's writing on reopen", async () => {

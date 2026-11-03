@@ -404,7 +404,7 @@ If you record meetings with Krisp or MacWhisper (or both), the plugin can copy a
 Use any AI assistant your organization approves — Gemini, Claude, ChatGPT, Copilot, or a custom agent of your own. The plugin never contacts any of them; it copies text for you to paste and files the reply you copy back:
 
 1. In the meeting note, click the **Copy meeting for AI assistant** icon (clipboard with an arrow) in the note's top-right corner — or the same button on the meeting in **Today's meetings**. It copies a **MEETING DETAILS** block from your calendar (title, date, time, attendees), your **Notes** and the **Transcript** — with the plugin's instructions in front, unless you turned **Include instructions when copying** off.
-2. Paste it into your assistant, then copy its whole reply.
+2. Paste it into your assistant, then copy its whole reply — with the assistant's copy button, or by selecting the reply in the chat window and pressing **Cmd + C**.
 3. Click the **Add AI reply** icon (clipboard with a page) next to it.
 
 Every meeting note's header also has an **Import transcript** icon (a file with a sound wave). All three are commands too (**Cmd + P**), for hotkeys.

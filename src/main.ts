@@ -16,7 +16,7 @@
  *   - Expose the settings tab.
  */
 
-import { MarkdownView, normalizePath, Notice, Plugin, TFile } from "obsidian";
+import { htmlToMarkdown, MarkdownView, normalizePath, Notice, Plugin, TFile } from "obsidian";
 import { promises as fs } from "fs";
 import { homedir } from "os";
 import { join } from "path";
@@ -39,7 +39,9 @@ import {
   DECISIONS_SECTIONS,
   DEFAULT_INSTRUCTIONS,
   parseReply,
+  tidyHtmlTables,
   TRANSCRIPT_SECTIONS,
+  unescapeMarkdown,
   type ApplyResult,
   type MeetingInfo,
 } from "./assistant";
@@ -2433,7 +2435,26 @@ export default class GoogleCalendarPlugin extends Plugin {
     });
   }
 
+  /**
+   * File the reply on the clipboard. A reply selected and copied in the
+   * assistant's chat window, rather than with its copy button, has lost its
+   * Markdown in plain text, so the formatted copy is read instead.
+   */
   async addAssistantReply(file: TFile): Promise<void> {
-    await this.applyAssistantReply(file, await navigator.clipboard.readText());
+    const text = await navigator.clipboard.readText();
+    const html = parseReply(text) ? undefined : await clipboardHtml();
+    await this.applyAssistantReply(file, html ? unescapeMarkdown(htmlToMarkdown(tidyHtmlTables(html))) : text);
   }
+}
+
+/** The clipboard's formatted (HTML) copy, if it has one and may be read. */
+async function clipboardHtml(): Promise<string | undefined> {
+  try {
+    for (const item of await navigator.clipboard.read()) {
+      if (item.types.includes("text/html")) return await (await item.getType("text/html")).text();
+    }
+  } catch (err) {
+    console.warn("[CalendarNoteIntegration] Couldn't read the clipboard's formatted text:", err);
+  }
+  return undefined;
 }

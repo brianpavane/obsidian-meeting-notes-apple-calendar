@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { actionLine, applyReply, copyText, DEFAULT_INSTRUCTIONS, parseReply } from "../src/assistant";
+import { actionLine, applyReply, copyText, DEFAULT_INSTRUCTIONS, parseReply, tidyHtmlTables, unescapeMarkdown } from "../src/assistant";
 import { builtInTemplate } from "../src/noteCreator";
 import { continuityItems } from "../src/sections";
 
@@ -516,4 +516,62 @@ test("Next Steps priorities are read in the other shapes assistants write them",
   assert.deepEqual(["(2026-10-09 – High)", "[High]", "(**Low**)", "(Medium priority)"].map(tail), ["⏫ 📅 2026-10-09", "⏫", "🔽", "🔼"]);
   assert.equal(actionLine(parseReply("## Executive Summary\nx\n\n## Next Steps\n- [ ] **[[Ann Lee]]**: Send the runbook (P1)\n")!.actionItems[0]),
     "- [ ] Send the runbook (P1) @[[Ann Lee]]", "unknown labels stay in the task");
+});
+
+test("tidyHtmlTables flattens cell paragraphs and gives a header-less table a header row", () => {
+  assert.equal(
+    tidyHtmlTables('<p>x</p><table><tbody><tr><td><p>Name</p></td><td>Role</td></tr><tr><td><p>Ann</p></td><td>PM</td></tr></tbody></table>'),
+    '<p>x</p><table><tbody><tr><th> Name </th><th>Role</th></tr><tr><td> Ann </td><td>PM</td></tr></tbody></table>'
+  );
+  const headed = "<table><tr><th>Name</th></tr><tr><td>Ann</td></tr></table>";
+  assert.equal(tidyHtmlTables(headed), headed);
+});
+
+test("a six-section reply copied as formatted text parses once the converter's escapes are removed", () => {
+  const converted = [
+    "**Meeting Metadata**",
+    "",
+    "-   **Category:** 1:1",
+    "-   **Organizations:** ABC Corp",
+    "-   **Sentiment:** Mixed",
+    "",
+    "**1\\. Executive Summary**",
+    "",
+    "\\[\\[John Smith\\]\\] and \\[\\[Jane Doe\\]\\] met.",
+    "",
+    "**2\\. Next Steps**",
+    "",
+    "-   **\\[\\[Jane Doe\\]\\]**: Send the deck",
+    "    ",
+    "-   **\\[\\[John Smith\\]\\]**: Book the room",
+    "",
+    "**3\\. Summary (by topic)**",
+    "",
+    "**Pricing**",
+    "",
+    "Reviewed the \\[\\[ABC Corp\\]\\] quote.",
+    "",
+    "**4\\. Key Decisions/Agreements**",
+    "",
+    "-   Keep the price",
+    "",
+    "**5\\. Additional Items**",
+    "",
+    "-   None",
+    "",
+    "**6\\. Speakers**",
+    "",
+    "| **Transcript Reference** | **Identified Name** | **Organization / Role** |",
+    "| --- | --- | --- |",
+    "| Speaker 1 | \\[\\[Jane Doe\\]\\] | ABC Corp / PM |",
+  ].join("\n");
+  assert.equal(parseReply(converted)?.actionItems.length ?? 0, 0, "escaped, the headings aren't found");
+  const reply = parseReply(unescapeMarkdown(converted));
+  assert.ok(reply);
+  assert.deepEqual(reply.summary, ["[[John Smith]] and [[Jane Doe]] met."]);
+  assert.deepEqual(reply.actionItems.map((a) => [a.people, a.task]), [[["Jane Doe"], "Send the deck"], [["John Smith"], "Book the room"]]);
+  assert.deepEqual(reply.decisions, ["Keep the price"]);
+  assert.deepEqual(reply.speakerNames, ["Jane Doe"]);
+  assert.equal(reply.category, "1:1");
+  assert.deepEqual(reply.organizations, ["ABC Corp"]);
 });

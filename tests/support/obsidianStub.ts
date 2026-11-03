@@ -55,8 +55,19 @@ export async function requestUrl(
   return requestUrlMock(options);
 }
 
+let htmlToMarkdownMock: (html: string) => string = (html) => html;
+
+export function setHtmlToMarkdownMock(mock: (html: string) => string): void {
+  htmlToMarkdownMock = mock;
+}
+
+export function htmlToMarkdown(html: string): string {
+  return htmlToMarkdownMock(html);
+}
+
 export function resetObsidianTestState(): void {
   notices.length = 0;
+  htmlToMarkdownMock = (html) => html;
   requestUrlMock = async () => ({
     status: 200,
     text: "",

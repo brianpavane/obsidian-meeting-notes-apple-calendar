@@ -291,6 +291,24 @@ function replyLines(text: string): string[] {
   return trimBlank(first > 0 ? lines.slice(first) : lines);
 }
 
+/**
+ * HTML tables made ready for Markdown conversion: paragraphs and line breaks
+ * inside cells flattened (they would split a row), and the first row of a
+ * table without header cells made its header (a Markdown table needs one).
+ */
+export function tidyHtmlTables(html: string): string {
+  return html.replace(/<table\b[\s\S]*?<\/table>/gi, (table) => {
+    const flat = table.replace(/<\/?(?:p|div|br)\b[^>]*>/gi, " ");
+    if (/<th\b/i.test(flat)) return flat;
+    return flat.replace(/<tr\b[\s\S]*?<\/tr>/i, (row) => row.replace(/<td\b/gi, "<th").replace(/<\/td>/gi, "</th>"));
+  });
+}
+
+/** Markdown converted from HTML without the backslashes the converter adds ("\[\[Bob\]\]", "1\."), which would hide links and headings. */
+export function unescapeMarkdown(markdown: string): string {
+  return markdown.replace(/\\([\\`*_{}[\]()#+\-.!|>~=])/g, "$1");
+}
+
 /** Every `- [ ] **[[Owner]]**: Task (date, Priority)` line in `text`, as action items. */
 export function nextStepsIn(text: string): ActionItem[] {
   return text.replace(/\r\n/g, "\n").split("\n")
